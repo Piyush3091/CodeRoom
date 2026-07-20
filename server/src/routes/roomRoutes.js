@@ -1,14 +1,25 @@
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
-const { createRoom, joinRoom, getMyRooms, getRoomById } = require('../controllers/roomController');
+const {
+  createRoom,
+  joinRoom,
+  getMyRooms,
+  getRoomById,
+  updatePermissions,
+  changeRole,
+  removeParticipant,
+} = require('../controllers/roomController');
 
 const router = express.Router();
 
-router.use(protect); // all room routes require login
+router.use(protect);
 
 router.post('/', createRoom);
 router.post('/join', joinRoom);
 router.get('/', getMyRooms);
 router.get('/:id', getRoomById);
+router.patch('/:id/participants/:userId/permissions', updatePermissions);
+router.patch('/:id/participants/:userId/role', changeRole);
+router.delete('/:id/participants/:userId', removeParticipant);
 
 module.exports = router;
