@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
-import Editor from '@monaco-editor/react';
+import Editor, { DiffEditor } from '@monaco-editor/react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from 'y-monaco';
@@ -23,13 +23,15 @@ const Room = () => {
   const [language, setLanguage] = useState('javascript');
   const [checkpoints, setCheckpoints] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [diffMode, setDiffMode] = useState(false);
+  const [diffLeft, setDiffLeft] = useState(null); // checkpoint object or null
+  const [diffRight, setDiffRight] = useState(null); // checkpoint object, or 'current'
 
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const bindingRef = useRef(null);
   const providerRef = useRef(null);
   const decorationsRef = useRef([]);
-
 
   const loadRoom = () => {
     getRoomById(id)
@@ -111,6 +113,7 @@ const Room = () => {
     }
     styleTag.innerHTML = css;
   };
+
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (!editorRef.current) return;
@@ -187,14 +190,13 @@ const Room = () => {
       setActionError(err.response?.data?.message || 'Failed to remove participant');
     }
   };
- 
 
   const handleRun = async () => {
     setRunning(true);
     setOutput(null);
     try {
       const code = editorRef.current.getValue();
-      const res = await executeCode(id,language, code);
+      const res = await executeCode(id, language, code);
       setOutput(res.data.result);
     } catch (err) {
       setOutput({ stderr: err.response?.data?.message || 'Execution failed' });
@@ -202,6 +204,7 @@ const Room = () => {
       setRunning(false);
     }
   };
+
   const handleSaveCheckpoint = async () => {
     const label = window.prompt('Name this checkpoint (e.g. "Working solution v1"):');
     if (!label) return;
@@ -234,8 +237,6 @@ const Room = () => {
     setShowHistory(next);
     if (next) loadCheckpoints();
   };
-
-
 
   if (error) return <p style={{ color: 'red' }}>{error}</p>;
   if (!room) return <p>Loading room...</p>;
@@ -298,6 +299,7 @@ const Room = () => {
           </table>
         </div>
       )}
+
       <div style={{ marginBottom: 8 }}>
         <select value={language} onChange={(e) => setLanguage(e.target.value)}>
           <option value="javascript">JavaScript</option>
@@ -330,15 +332,50 @@ const Room = () => {
               {checkpoints.map((c) => (
                 <li key={c._id}>
                   <strong>{c.label}</strong> — {c.createdBy.name}, {new Date(c.createdAt).toLocaleString()}{' '}
-                  <button onClick={() => handleRestoreCheckpoint(c)}>Restore</button>
+                  <button onClick={() => handleRestoreCheckpoint(c)}>Restore</button>{' '}
+                  <button onClick={() => setDiffLeft(c)}>Set as Left</button>{' '}
+                  <button onClick={() => setDiffRight(c)}>Set as Right</button>
                 </li>
               ))}
             </ul>
           )}
+
+          <div style={{ marginTop: 8 }}>
+            <button onClick={() => setDiffRight('current')}>Compare Right = Current Document</button>{' '}
+            <button
+              onClick={() => setDiffMode(true)}
+              disabled={!diffLeft || !diffRight}
+              style={{ marginLeft: 8 }}
+            >
+              Show Diff
+            </button>
+            {diffMode && (
+              <button onClick={() => setDiffMode(false)} style={{ marginLeft: 8 }}>
+                Close Diff
+              </button>
+            )}
+          </div>
+
+          {diffLeft && <p>Left: {diffLeft.label}</p>}
+          {diffRight && <p>Right: {diffRight === 'current' ? 'Current live document' : diffRight.label}</p>}
         </div>
       )}
 
       <Editor height="500px" language={language} theme="vs-dark" onMount={handleEditorMount} />
+
+      {diffMode && diffLeft && diffRight && (
+        <div style={{ marginTop: 12 }}>
+          <h3>Diff View</h3>
+          <DiffEditor
+            height="400px"
+            language={language}
+            theme="vs-dark"
+            original={diffLeft.content}
+            modified={diffRight === 'current' ? editorRef.current?.getValue() ?? '' : diffRight.content}
+          />
+        </div>
+      )}
+
       {output && (
         <div style={{ background: '#1e1e1e', color: '#ddd', padding: 12, marginTop: 8, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
           <strong>Output:</strong>
@@ -349,7 +386,5 @@ const Room = () => {
     </div>
   );
 };
-
-
 
 export default Room;
