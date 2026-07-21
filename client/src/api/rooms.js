@@ -16,3 +16,8 @@ export const removeParticipant = (roomId, userId) =>
 
 export const executeCode = (roomId, language, code) =>
   api.post('/execute', { roomId, language, code });
+
+export const createCheckpoint = (roomId, label, content) =>
+  api.post(`/rooms/${roomId}/checkpoints`, { label, content });
+
+export const getCheckpoints = (roomId) => api.get(`/rooms/${roomId}/checkpoints`);

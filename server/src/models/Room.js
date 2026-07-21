@@ -21,6 +21,10 @@ const roomSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     code: { type: String, required: true, unique: true, default: () => generateRoomCode() },
+    autosave: {
+      content: { type: String, default: '' },
+      savedAt: { type: Date, default: null },
+    },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     participants: [
       {

@@ -4,7 +4,7 @@ import Editor from '@monaco-editor/react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from 'y-monaco';
-import { getRoomById, updatePermissions, changeRole, removeParticipant, executeCode } from '../api/rooms';
+import { getRoomById, updatePermissions, changeRole, removeParticipant, executeCode, createCheckpoint, getCheckpoints } from '../api/rooms';
 import { useAuth } from '../context/AuthContext';
 
 const sanitize = (str) => String(str).replace(/["\\]/g, '');
@@ -21,6 +21,8 @@ const Room = () => {
   const [output, setOutput] = useState(null);
   const [running, setRunning] = useState(false);
   const [language, setLanguage] = useState('javascript');
+  const [checkpoints, setCheckpoints] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -109,6 +111,20 @@ const Room = () => {
     }
     styleTag.innerHTML = css;
   };
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (!editorRef.current) return;
+      const code = editorRef.current.getValue();
+      const blob = new Blob([JSON.stringify({ content: code })], { type: 'application/json' });
+      navigator.sendBeacon(`/api/rooms/${id}/checkpoints/autosave`, blob);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      handleBeforeUnload(); // also fire on React unmount (navigating away within the app, not just closing the tab)
+    };
+  }, [id]);
 
   const handleEditorMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -186,6 +202,38 @@ const Room = () => {
       setRunning(false);
     }
   };
+  const handleSaveCheckpoint = async () => {
+    const label = window.prompt('Name this checkpoint (e.g. "Working solution v1"):');
+    if (!label) return;
+    try {
+      const code = editorRef.current.getValue();
+      await createCheckpoint(id, label, code);
+      if (showHistory) loadCheckpoints();
+    } catch (err) {
+      setActionError(err.response?.data?.message || 'Failed to save checkpoint');
+    }
+  };
+
+  const loadCheckpoints = async () => {
+    try {
+      const res = await getCheckpoints(id);
+      setCheckpoints(res.data.checkpoints);
+    } catch (err) {
+      setActionError(err.response?.data?.message || 'Failed to load checkpoints');
+    }
+  };
+
+  const handleRestoreCheckpoint = (checkpoint) => {
+    if (!window.confirm(`Restore "${checkpoint.label}"? This will overwrite the current document for everyone in the room.`)) return;
+    const model = editorRef.current.getModel();
+    model.setValue(checkpoint.content);
+  };
+
+  const toggleHistory = () => {
+    const next = !showHistory;
+    setShowHistory(next);
+    if (next) loadCheckpoints();
+  };
 
 
 
@@ -262,6 +310,33 @@ const Room = () => {
           </button>
         )}
       </div>
+
+      {myParticipant?.permissions?.canViewHistory && (
+        <div style={{ marginBottom: 8 }}>
+          <button onClick={handleSaveCheckpoint}>Save Checkpoint</button>
+          <button onClick={toggleHistory} style={{ marginLeft: 8 }}>
+            {showHistory ? 'Hide History' : 'Show History'}
+          </button>
+        </div>
+      )}
+
+      {showHistory && (
+        <div style={{ border: '1px solid #444', padding: 12, marginBottom: 12 }}>
+          <h3>Checkpoints</h3>
+          {checkpoints.length === 0 ? (
+            <p>No checkpoints saved yet.</p>
+          ) : (
+            <ul>
+              {checkpoints.map((c) => (
+                <li key={c._id}>
+                  <strong>{c.label}</strong> — {c.createdBy.name}, {new Date(c.createdAt).toLocaleString()}{' '}
+                  <button onClick={() => handleRestoreCheckpoint(c)}>Restore</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <Editor height="500px" language={language} theme="vs-dark" onMount={handleEditorMount} />
       {output && (

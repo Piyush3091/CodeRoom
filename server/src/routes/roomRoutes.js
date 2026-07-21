@@ -11,7 +11,10 @@ const {
 } = require('../controllers/roomController');
 
 const router = express.Router();
+const checkpointRoutes = require('./checkpointRoutes');
 
+
+router.use('/:id/checkpoints', checkpointRoutes);
 router.use(protect);
 
 router.post('/', createRoom);
