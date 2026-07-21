@@ -4,7 +4,7 @@ import Editor from '@monaco-editor/react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from 'y-monaco';
-import { getRoomById, updatePermissions, changeRole, removeParticipant } from '../api/rooms';
+import { getRoomById, updatePermissions, changeRole, removeParticipant, executeCode } from '../api/rooms';
 import { useAuth } from '../context/AuthContext';
 
 const sanitize = (str) => String(str).replace(/["\\]/g, '');
@@ -18,12 +18,16 @@ const Room = () => {
   const [error, setError] = useState('');
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [actionError, setActionError] = useState('');
+  const [output, setOutput] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [language, setLanguage] = useState('javascript');
 
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const bindingRef = useRef(null);
   const providerRef = useRef(null);
   const decorationsRef = useRef([]);
+
 
   const loadRoom = () => {
     getRoomById(id)
@@ -167,6 +171,23 @@ const Room = () => {
       setActionError(err.response?.data?.message || 'Failed to remove participant');
     }
   };
+ 
+
+  const handleRun = async () => {
+    setRunning(true);
+    setOutput(null);
+    try {
+      const code = editorRef.current.getValue();
+      const res = await executeCode(id,language, code);
+      setOutput(res.data.result);
+    } catch (err) {
+      setOutput({ stderr: err.response?.data?.message || 'Execution failed' });
+    } finally {
+      setRunning(false);
+    }
+  };
+
+
 
   if (error) return <p style={{ color: 'red' }}>{error}</p>;
   if (!room) return <p>Loading room...</p>;
@@ -229,10 +250,31 @@ const Room = () => {
           </table>
         </div>
       )}
+      <div style={{ marginBottom: 8 }}>
+        <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+          <option value="javascript">JavaScript</option>
+          <option value="python">Python</option>
+          <option value="cpp">C++</option>
+        </select>
+        {myParticipant?.permissions?.canExecute && (
+          <button onClick={handleRun} disabled={running} style={{ marginLeft: 8 }}>
+            {running ? 'Running...' : 'Run Code'}
+          </button>
+        )}
+      </div>
 
-      <Editor height="500px" defaultLanguage="javascript" theme="vs-dark" onMount={handleEditorMount} />
+      <Editor height="500px" language={language} theme="vs-dark" onMount={handleEditorMount} />
+      {output && (
+        <div style={{ background: '#1e1e1e', color: '#ddd', padding: 12, marginTop: 8, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+          <strong>Output:</strong>
+          <div>{output.stdout}</div>
+          {output.stderr && <div style={{ color: '#f66' }}>{output.stderr}</div>}
+        </div>
+      )}
     </div>
   );
 };
+
+
 
 export default Room;

@@ -13,3 +13,6 @@ export const changeRole = (roomId, userId, role) =>
 
 export const removeParticipant = (roomId, userId) =>
   api.delete(`/rooms/${roomId}/participants/${userId}`);
+
+export const executeCode = (roomId, language, code) =>
+  api.post('/execute', { roomId, language, code });

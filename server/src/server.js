@@ -4,13 +4,14 @@ const cors = require('cors');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const roomRoutes = require('./routes/roomRoutes');
+const executeRoutes = require('./routes/executeRoutes');
 
 connectDB();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-
+app.use('/api/execute', executeRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
 
